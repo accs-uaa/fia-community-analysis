@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 # ---------------------------------------------------------------------------
-# Adjudicate FIA Cover Data
+# Compile Cover Data
 # Author: Timm Nawrocki, Alaska Center for Conservation Science
-# Last Updated: 2021-04-30
+# Last Updated: 2021-05-01
 # Usage: Script should be executed in R 4.0.0+.
-# Description: "Adjudicate FIA Cover Data" merges cover values from multiple layers, finds plot level means, and reconciles nomenclature to the accepted names of the AKVEG taxonomic standard.
+# Description: "Compile Cover Data" merges cover values from multiple layers from the FIA database, finds plot level means for FIA data, and reconciles nomenclature of FIA data to the accepted names of the AKVEG taxonomic standard. The script then combines the formatted and reconciled FIA data with data from the AKVEG database.
 # ---------------------------------------------------------------------------
 
 # Set root directory
@@ -23,16 +23,28 @@ FIA_database = paste(data_folder,
                      'SQLite_FIADB_INTAK_TANANA.db',
                      sep = '/')
 
-# Define input USDA Plants Database codes
+# Define input site table
+sites_file = paste(data_folder,
+                  'sites',
+                  'sites_all.csv',
+                  sep = '/')
+
+# Define input USDA Plants Database codes table
 plants_file = paste(data_folder,
-                    'FIA',
+                    'reference',
                     'speciesPlants_03062018.xlsx',
+                    sep = '/')
+
+# Define nonvascular functional groups table
+groups_file = paste(data_folder,
+                    'reference',
+                    'nonvascular_functional_groups.csv',
                     sep = '/')
 
 # Define output file
 output_cover = paste(data_folder,
                      'vegetation',
-                     'cover_fia.csv',
+                     'cover_all.csv',
                      sep = '/')
 
 # Set repository directory
@@ -49,8 +61,10 @@ library(stringr)
 library(tibble)
 library(tidyr)
 
-# Read plants table into data frame
+# Read reference tables into data frame
 plants_codes = read_excel(plants_file, sheet = 'speciesPlants')
+functional_groups = read.csv(groups_file, encoding = 'UTF-8')
+sites_all = read.csv(sites_file, encoding = 'UTF-8')
 
 # Import database connection function
 connection_script = paste(repository,
@@ -66,6 +80,9 @@ authentication = paste(drive,
                        sep = '/')
 akveg_connection = connect_database_postgresql(authentication)
 
+#### FORMAT AND RECONCILE FIA DATA
+####------------------------------
+
 # Define queries for AKVEG
 query_adjudicated = 'SELECT * FROM taxon_adjudicated'
 query_accepted = 'SELECT * FROM taxon_accepted'
@@ -78,7 +95,7 @@ taxa_accepted = as_tibble(dbGetQuery(akveg_connection, query_accepted))
 fia_connection = dbConnect(drv = SQLite(), dbname = FIA_database)
 
 # Define query for FIA database
-query_cover = 'SELECT P2VEG_SUBPLOT_SPP.PLOT as plot
+query_vascular = 'SELECT P2VEG_SUBPLOT_SPP.PLOT as plot
     , P2VEG_SUBPLOT_SPP.SUBP as subplot
     , P2VEG_SUBPLOT_SPP.GROWTH_HABIT_CD as strata
     , P2VEG_SUBPLOT_SPP.LAYER as layer
@@ -90,12 +107,24 @@ query_cover = 'SELECT P2VEG_SUBPLOT_SPP.PLOT as plot
 FROM P2VEG_SUBPLOT_SPP
     LEFT JOIN PLOT ON P2VEG_SUBPLOT_SPP.PLOT = PLOT.PLOT
 ORDER BY plot;'
+query_nonvascular = 'SELECT GRND_LYR_FNCTL_GRP.PLOT as plot
+    , GRND_LYR_FNCTL_GRP.SUBP as subplot
+    , GRND_LYR_FNCTL_GRP.TRANSECT as transect
+    , GRND_LYR_FNCTL_GRP.COVER_CLASS_CD as cover
+    , GRND_LYR_FNCTL_GRP.FUNCTIONAL_GROUP_CD as name_original_code
+    , PLOT.MEASDAY as day
+    , PLOT.MEASMON as month
+    , PLOT.MEASYEAR as year
+FROM GRND_LYR_FNCTL_GRP
+    LEFT JOIN PLOT ON GRND_LYR_FNCTL_GRP.PLOT = PLOT.PLOT
+ORDER BY plot;'
 
-# Read cover data into tibble
-cover_table = as_tibble(dbGetQuery(fia_connection, query_cover))
+# Read FIA cover data into tibbles
+vascular_fia = as_tibble(dbGetQuery(fia_connection, query_vascular))
+nonvascular_fia = as_tibble(dbGetQuery(fia_connection, query_nonvascular))
 
-# Summarize cover by subplot
-cover_subplot = cover_table %>%
+# Summarize FIA vascular cover by subplot
+vascular_subplot_fia = vascular_fia %>%
   mutate(veg_observe_date = if_else(day < 10,
                                     paste(year, '-0', month, '-0', day, sep =''),
                                     paste(year, '-0', month, '-', day, sep = ''))) %>%
@@ -108,18 +137,143 @@ cover_subplot = cover_table %>%
   summarize(max_cover = sum(cover), min_cover = max(cover)) %>%
   mutate(cover = (max_cover + min_cover)/2)
 
-# Summarize cover by plot and add metadata
-cover_plot = cover_subplot %>%
+# Summarize FIA cover by plot and add metadata
+vascular_plot_fia = vascular_subplot_fia %>%
   group_by(site_code, veg_observe_date, name_original_code) %>%
   summarize(cover = mean(cover)) %>%
-  mutate(veg_observe_date = ymd(veg_observe_date)) %>%
   left_join(plants_codes, by = c('name_original_code' = 'codePLANTS')) %>%
   rename(name_original = namePLANTS) %>%
   left_join(taxa_adjudicated, by = c('name_original' = 'name_adjudicated')) %>%
   left_join(taxa_accepted, by = 'accepted_id') %>%
   mutate(project = 'FIA Interior') %>%
+  mutate(cover_type = 'total cover')
+
+# Adjudicate accepted species names for FIA data
+vascular_plot_fia = vascular_plot_fia %>%
+  filter(name_original_code != '2GP' &
+           name_original_code != '2GL') %>%
+  mutate(name_accepted = case_when(name_original_code == '2FORB' ~ 'Forb',
+                                   name_original_code == '2GRAM' ~ 'Graminoid',
+                                   name_original_code == '2SHRUB' ~ 'Shrub',
+                                   name_original_code == 'DROC' ~ 'Dryas',
+                                   name_original_code == 'LYOB' ~ 'Spore-bearing',
+                                   name_original_code == 'VAOX' ~ 'Oxycoccus microcarpus',
+                                   TRUE ~ name_accepted)) %>%
+  select(project, site_code, veg_observe_date, cover_type, name_accepted, cover)
+
+# Identify FIA functional groups
+nonvascular_subplot_fia = nonvascular_fia %>%
+  filter(name_original_code != 'N' |
+           name_original_code != 'Y') %>%
+  mutate(cover = if_else(cover == 'T', '0', cover)) %>%
+  mutate(cover = as.numeric(cover)) %>%
+  mutate(name_accepted = case_when(name_original_code == 'CC' ~ 'Biotic Crust',
+                                   name_original_code == 'CO' ~ 'Orange Lichen',
+                                   name_original_code == 'LF' ~ 'Forage Lichen',
+                                   name_original_code == 'LL' ~ 'Foliose Lichen',
+                                   name_original_code == 'LLFOL' ~ 'Foliose Lichen',
+                                   name_original_code == 'LLFRU' ~ 'Fruticose Lichen',
+                                   name_original_code == 'LN' ~ 'N-fixing Foliose Lichen',
+                                   name_original_code == 'LNFOL' ~ 'N-fixing Foliose Lichen',
+                                   name_original_code == 'LNFRU' ~ 'N-fixing Fruticose Lichen',
+                                   name_original_code == 'LR' ~ 'Fruticose Lichen',
+                                   name_original_code == 'LU' ~ 'N-fixing Fruticose Lichen',
+                                   name_original_code == 'MF' ~ 'Feathermoss',
+                                   name_original_code == 'MN' ~ 'N-fixing Feathermoss',
+                                   name_original_code == 'MS' ~ 'Sphagnum',
+                                   name_original_code == 'MT' ~ 'Turf Moss',
+                                   name_original_code == 'VF' ~ 'Thalloid Liverwort',
+                                   name_original_code == 'VS' ~ 'Liverwort',
+                                   TRUE ~ 'Other'))
+
+# Summarize FIA nonvascular cover by plot
+nonvascular_plot_fia = nonvascular_subplot_fia %>%
+  mutate(veg_observe_date = if_else(day < 10,
+                                    paste(year, '-0', month, '-0', day, sep =''),
+                                    paste(year, '-0', month, '-', day, sep = ''))) %>%
+  mutate(site_code = case_when(nchar(as.integer(plot)) == 2 ~ paste('FIAINT_', '000', plot, sep = ''),
+                               nchar(as.integer(plot)) == 3 ~ paste('FIAINT_', '00', plot, sep = ''),
+                               nchar(as.integer(plot)) == 4 ~ paste('FIAINT_', '0', plot, sep = ''),
+                               nchar(as.integer(plot)) == 5 ~ paste('FIAINT_', plot, sep = ''),
+                               TRUE ~ 'none')) %>%
+  group_by(site_code, veg_observe_date, name_accepted) %>%
+  summarize(cover = mean(cover)) %>%
+  mutate(project = 'FIA Interior') %>%
   mutate(cover_type = 'total cover') %>%
-  select(project, site_code, veg_observe_date, cover_type, name_original_code, name_original, name_accepted, cover)
+  select(project, site_code, veg_observe_date, cover_type, name_accepted, cover)
+
+# Combine vascular and nonvascular FIA cover data
+cover_fia = rbind(vascular_plot_fia, nonvascular_plot_fia)
+
+#### FORMAT AKVEG DATA
+####------------------------------
+
+# Define query for AKVEG
+query_cover = 'SELECT cover.cover_id as cover_id
+     , project.project_abbr as project
+     , site.site_code as site_code
+     , cover.veg_observe_date as veg_observe_date
+     , cover_type.cover_type as cover_type
+     , taxon_accepted.name_accepted as name_accepted
+     , category.category as category
+     , cover.cover as cover
+FROM cover
+    LEFT JOIN project ON cover.project_id = project.project_id
+    LEFT JOIN site ON cover.site_id = site.site_id
+    LEFT JOIN cover_type ON cover.cover_type_id = cover_type.cover_type_id
+    LEFT JOIN taxon_adjudicated ON cover.adjudicated_id = taxon_adjudicated.adjudicated_id
+    LEFT JOIN taxon_accepted ON taxon_adjudicated.accepted_id = taxon_accepted.accepted_id
+    LEFT JOIN hierarchy ON taxon_accepted.hierarchy_id = hierarchy.hierarchy_id
+    LEFT JOIN category ON hierarchy.category_id = category.category_id
+WHERE cover.cover_type_id = 2
+ORDER BY cover_id;'
+
+# Select forested plots from AKVEG
+sites_akveg = sites_all %>%
+  filter(project != 'FIA Interior') %>%
+  select(site_code)
+
+# Read PostgreSQL data into dataframe
+cover_akveg = as_tibble(dbGetQuery(akveg_connection, query_cover))
+cover_akveg = cover_akveg %>%
+  mutate(veg_observe_date = as.character(veg_observe_date)) %>%
+  inner_join(sites_akveg, by = 'site_code')
+
+# Split vascular and nonvascular data for AKVEG
+vascular_akveg = cover_akveg %>%
+  filter(category == 'Eudicot' |
+           category == 'Fern' |
+           category == 'Gymnosperm' |
+           category == 'Horsetail' |
+           category == 'Lycophyte' |
+           category == 'Monocot')
+nonvascular_akveg = cover_akveg %>%
+  filter(category == 'Lichen' |
+           category == 'Liverwort' |
+           category == 'Moss')
+
+# Summarize AKVEG nonvascular data to functional groups
+nonvascular_akveg = nonvascular_akveg %>%
+  inner_join(functional_groups, by = 'name_accepted') %>%
+  group_by(project, site_code, veg_observe_date, cover_type, functional_group) %>%
+  summarize(cover = sum(cover)) %>%
+  select(project, site_code, veg_observe_date, cover_type, functional_group, cover) %>%
+  rename(name_accepted = functional_group) %>%
+  mutate(cover = if_else(cover > 100, 100, cover))
+
+# Control duplicate errors in AKVEG vascular data
+vascular_akveg = vascular_akveg %>%
+  group_by(project, site_code, veg_observe_date, cover_type, name_accepted) %>%
+  summarize(cover = max(cover))
+
+# Combine vascular and nonvascular AKVEG cover data
+cover_akveg_formatted = rbind(vascular_akveg, nonvascular_akveg)
+
+#### COMBINE AND EXPORT DATA
+####------------------------------
+
+# Combine FIA and AKVEG data
+cover_all = rbind(cover_fia, cover_akveg_formatted)
 
 # Export data
-write.csv(cover_plot, file = output_cover, fileEncoding = 'UTF-8', row.names = FALSE)
+write.csv(cover_all, file = output_cover, fileEncoding = 'UTF-8', row.names = FALSE)

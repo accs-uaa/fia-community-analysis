@@ -105,7 +105,7 @@ cover_akveg = as_tibble(dbGetQuery(akveg_connection, query_cover))
 # Find distinct plots with at least 3% foliar cover of at least one tree species
 forest_sites = cover_akveg %>%
   filter((name_accepted == 'Picea sitchensis' |
-            name_accepted == 'Picea Ã—lutzii' |
+            name_accepted == 'Picea ×lutzii' |
             name_accepted == 'Picea glauca' |
             name_accepted == 'Picea mariana' |
             name_accepted == 'Larix laricina' |
