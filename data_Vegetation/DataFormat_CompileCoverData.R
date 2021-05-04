@@ -266,8 +266,33 @@ vascular_akveg = vascular_akveg %>%
   group_by(project, site_code, veg_observe_date, cover_type, name_accepted) %>%
   summarize(cover = max(cover))
 
+# Split AKVEG vascular data into tree and non-tree data
+tree_akveg = vascular_akveg %>%
+  filter(name_accepted == 'Picea sitchensis' |
+           name_accepted == 'Picea ×lutzii' |
+           name_accepted == 'Picea glauca' |
+           name_accepted == 'Picea mariana' |
+           name_accepted == 'Larix laricina' |
+           name_accepted == 'Betula kenaica' |
+           name_accepted == 'Betula neoalaskana' |
+           name_accepted == 'Populus tremuloides' |
+           name_accepted == 'Populus trichocarpa' |
+           name_accepted == 'Populus balsamifera')
+nontree_akveg = vascular_akveg %>%
+  filter((name_accepted != 'Picea sitchensis' &
+            name_accepted != 'Picea ×lutzii' &
+            name_accepted != 'Picea glauca' &
+            name_accepted != 'Picea mariana' &
+            name_accepted != 'Larix laricina' &
+            name_accepted != 'Betula kenaica' &
+            name_accepted != 'Betula neoalaskana' &
+            name_accepted != 'Populus tremuloides' &
+            name_accepted != 'Populus trichocarpa' &
+            name_accepted != 'Populus balsamifera') &
+           cover >= 3)
+
 # Combine vascular and nonvascular AKVEG cover data
-cover_akveg_formatted = rbind(vascular_akveg, nonvascular_akveg)
+cover_akveg_formatted = rbind(tree_akveg, nontree_akveg, nonvascular_akveg)
 
 #### COMBINE AND EXPORT DATA
 ####------------------------------
