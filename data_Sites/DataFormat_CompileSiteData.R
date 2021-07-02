@@ -102,19 +102,21 @@ ORDER BY cover_id;'
 site_akveg = as_tibble(dbGetQuery(akveg_connection, query_site))
 cover_akveg = as_tibble(dbGetQuery(akveg_connection, query_cover))
 
-# Find distinct plots with at least 3% foliar cover of at least one tree species
+# Find distinct plots with at least 10% foliar cover of summed tree species
 forest_sites = cover_akveg %>%
-  filter((name_accepted == 'Picea sitchensis' |
-            name_accepted == 'Picea ×lutzii' |
-            name_accepted == 'Picea glauca' |
-            name_accepted == 'Picea mariana' |
-            name_accepted == 'Larix laricina' |
-            name_accepted == 'Betula kenaica' |
-            name_accepted == 'Betula neoalaskana' |
-            name_accepted == 'Populus tremuloides' |
-            name_accepted == 'Populus trichocarpa' |
-            name_accepted == 'Populus balsamifera') &
-           cover >= 3) %>%
+  filter(name_accepted == 'Picea sitchensis' |
+           name_accepted == 'Picea ×lutzii' |
+           name_accepted == 'Picea glauca' |
+           name_accepted == 'Picea mariana' |
+           name_accepted == 'Larix laricina' |
+           name_accepted == 'Betula kenaica' |
+           name_accepted == 'Betula neoalaskana' |
+           name_accepted == 'Populus tremuloides' |
+           name_accepted == 'Populus trichocarpa' |
+           name_accepted == 'Populus balsamifera') %>%
+  group_by(site_code) %>%
+  summarize(tree_cover = sum(cover)) %>%
+  filter(tree_cover >= 5) %>%
   select(site_code) %>%
   distinct()
 
@@ -126,21 +128,26 @@ site_selected = site_akveg %>%
 # Create a connection to the FIA SQLite Database
 fia_connection = dbConnect(drv = SQLite(), dbname = FIA_database)
 
-# Define plot query for FIA database
-query_plot = 'SELECT PLOT.PLOT as plot
+# Define plot query for FIA database to select single condition forested plots
+query_plot = 'SELECT COND.PLOT as plot_number
+    , MAX(COND.CONDID) as max_condition
+    , COND.COND_STATUS_CD as status_code
     , PLOT.LAT as latitude
     , PLOT.LON as longitude
-FROM PLOT;'
+FROM COND
+    LEFT JOIN PLOT ON COND.PLOT = PLOT.PLOT
+GROUP BY plot_number
+HAVING max_condition = 1 AND status_code = 1;'
 
 # Read plot data into tibble
 plot_table = as_tibble(dbGetQuery(fia_connection, query_plot))
 
 # Define plot metadata
 site_fia = plot_table %>%
-  mutate(site_code = case_when(nchar(as.integer(plot)) == 2 ~ paste('FIAINT_', '000', plot, sep = ''),
-                               nchar(as.integer(plot)) == 3 ~ paste('FIAINT_', '00', plot, sep = ''),
-                               nchar(as.integer(plot)) == 4 ~ paste('FIAINT_', '0', plot, sep = ''),
-                               nchar(as.integer(plot)) == 5 ~ paste('FIAINT_', plot, sep = ''),
+  mutate(site_code = case_when(nchar(as.integer(plot_number)) == 2 ~ paste('FIAINT_', '000', plot_number, sep = ''),
+                               nchar(as.integer(plot_number)) == 3 ~ paste('FIAINT_', '00', plot_number, sep = ''),
+                               nchar(as.integer(plot_number)) == 4 ~ paste('FIAINT_', '0', plot_number, sep = ''),
+                               nchar(as.integer(plot_number)) == 5 ~ paste('FIAINT_', plot_number, sep = ''),
                                TRUE ~ 'none')) %>%
   mutate(project = 'FIA Interior') %>%
   mutate(perspective = 'ground') %>%

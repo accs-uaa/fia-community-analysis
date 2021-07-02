@@ -41,6 +41,12 @@ groups_file = paste(data_folder,
                     'nonvascular_functional_groups.csv',
                     sep = '/')
 
+# Define analysis codes table
+codes_file = paste(data_folder,
+                   'reference',
+                   'codes_analysis.xlsx',
+                   sep = '/')
+
 # Define output file
 output_cover = paste(data_folder,
                      'vegetation',
@@ -65,6 +71,7 @@ library(tidyr)
 plants_codes = read_excel(plants_file, sheet = 'speciesPlants')
 functional_groups = read.csv(groups_file, encoding = 'UTF-8')
 sites_all = read.csv(sites_file, encoding = 'UTF-8')
+codes_analysis = read_excel(codes_file, sheet = 'codes')
 
 # Import database connection function
 connection_script = paste(repository,
@@ -205,6 +212,16 @@ nonvascular_plot_fia = nonvascular_subplot_fia %>%
 # Combine vascular and nonvascular FIA cover data
 cover_fia = rbind(vascular_plot_fia, nonvascular_plot_fia)
 
+# Select single condition forested plots from FIA
+sites_fia = sites_all %>%
+  filter(project == 'FIA Interior') %>%
+  select(site_code)
+
+# Limit cover data to single condition forested plots
+cover_fia = cover_fia %>%
+  inner_join(sites_fia, by = 'site_code') %>%
+  select(project, site_code, veg_observe_date, cover_type, name_accepted, cover)
+
 #### FORMAT AKVEG DATA
 ####------------------------------
 
@@ -299,6 +316,10 @@ cover_akveg_formatted = rbind(tree_akveg, nontree_akveg, nonvascular_akveg)
 
 # Combine FIA and AKVEG data
 cover_all = rbind(cover_fia, cover_akveg_formatted)
+
+# Join analysis codes
+cover_all = cover_all %>%
+  left_join(codes_analysis, by = 'name_accepted')
 
 # Export data
 write.csv(cover_all, file = output_cover, fileEncoding = 'UTF-8', row.names = FALSE)
