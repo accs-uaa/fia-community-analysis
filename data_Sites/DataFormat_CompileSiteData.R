@@ -102,7 +102,7 @@ ORDER BY cover_id;'
 site_akveg = as_tibble(dbGetQuery(akveg_connection, query_site))
 cover_akveg = as_tibble(dbGetQuery(akveg_connection, query_cover))
 
-# Find distinct plots with at least 10% foliar cover of summed tree species
+# Find distinct plots with at least 5% foliar cover of summed tree species
 forest_sites = cover_akveg %>%
   filter(name_accepted == 'Picea sitchensis' |
            name_accepted == 'Picea ×lutzii' |
@@ -144,10 +144,14 @@ plot_table = as_tibble(dbGetQuery(fia_connection, query_plot))
 
 # Define plot metadata
 site_fia = plot_table %>%
-  mutate(site_code = case_when(nchar(as.integer(plot_number)) == 2 ~ paste('FIAINT_', '000', plot_number, sep = ''),
-                               nchar(as.integer(plot_number)) == 3 ~ paste('FIAINT_', '00', plot_number, sep = ''),
-                               nchar(as.integer(plot_number)) == 4 ~ paste('FIAINT_', '0', plot_number, sep = ''),
-                               nchar(as.integer(plot_number)) == 5 ~ paste('FIAINT_', plot_number, sep = ''),
+  mutate(site_code = case_when(nchar(as.integer(plot_number)) == 2 ~
+                                 paste('FIAINT_', '000', plot_number, sep = ''),
+                               nchar(as.integer(plot_number)) == 3 ~
+                                 paste('FIAINT_', '00', plot_number, sep = ''),
+                               nchar(as.integer(plot_number)) == 4 ~
+                                 paste('FIAINT_', '0', plot_number, sep = ''),
+                               nchar(as.integer(plot_number)) == 5 ~
+                                 paste('FIAINT_', plot_number, sep = ''),
                                TRUE ~ 'none')) %>%
   mutate(project = 'FIA Interior') %>%
   mutate(perspective = 'ground') %>%
