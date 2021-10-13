@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # Compile observed environment data
 # Author: Timm Nawrocki, Alaska Center for Conservation Science
-# Last Updated: 2021-10-06
+# Last Updated: 2021-10-12
 # Usage: Script should be executed in R 4.0.0+.
 # Description: "Compile observed environment data" merges and reconciles the observed environmental characteristics from the FIA Interior database and the AKVEG database.
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ def format_site_data(**kwargs):
     """
     Description: creates a set of sampling points aligned with Area of Interest from points and buffered points
     Inputs: 'work_geodatabase' -- path to a file geodatabase that will serve as the workspace
+            'cell_size' -- an integer value for both cell dimensions in meters
             'input_array' -- an array containing the site feature class (must be first) and the area of interest raster (must be second)
             'output_array' -- an array containing the output feature class
     Returned Value: Returns a point feature class with selected raster points labeled by site code
@@ -27,6 +28,7 @@ def format_site_data(**kwargs):
 
     # Parse key word argument inputs
     work_geodatabase = kwargs['work_geodatabase']
+    cell_size = kwargs['cell_size']
     sites_feature = kwargs['input_array'][0]
     area_of_interest = kwargs['input_array'][1]
     sites_formatted = kwargs['output_array'][0]
@@ -42,7 +44,7 @@ def format_site_data(**kwargs):
     arcpy.env.extent = Raster(area_of_interest).extent
 
     # Set cell size
-    arcpy.env.cellSize = 2
+    arcpy.env.cellSize = cell_size
 
     # Define intermediate datasets
     sites_buffer_distance = os.path.join(work_geodatabase, 'sites_buffer_distance')
@@ -60,6 +62,10 @@ def format_site_data(**kwargs):
         or plot_dimensions == '8×12'
         or plot_dimensions == '8×8'):
             return 4
+        elif plot_dimensions == '5×5':
+            return 2
+        elif plot_dimensions == '6×6':
+            return 3
         elif (plot_dimensions == '10×10'
         or plot_dimensions == '10×12'):
             return 5
@@ -74,6 +80,10 @@ def format_site_data(**kwargs):
             return 9
         elif plot_dimensions == '20×20':
             return 10
+        elif plot_dimensions == '20×100':
+            return 10
+        elif plot_dimensions == '25×100':
+            return 12
         elif plot_dimensions == '15 radius':
             return 14
         elif plot_dimensions == '30×30':
@@ -88,6 +98,8 @@ def format_site_data(**kwargs):
             return 29
         elif plot_dimensions == '34.7 radius':
             return 34
+        elif plot_dimensions == '804 radius':
+            return 804
         else:
             return 0"""
     arcpy.management.AddField(sites_buffer_distance,
@@ -133,7 +145,7 @@ def format_site_data(**kwargs):
                                      sites_selected_raster,
                                      'CELL_CENTER',
                                      '',
-                                     2,
+                                     cell_size,
                                      'BUILD'
                                      )
     # End timing

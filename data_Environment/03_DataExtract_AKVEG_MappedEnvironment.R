@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 # ---------------------------------------------------------------------------
-# Extract Features to Sites
+# Extract mapped environmental covariates to AKVEG sites
 # Author: Timm Nawrocki
-# Last Updated: 2021-10-11
+# Last Updated: 2021-10-12
 # Usage: Must be executed in R 4.0.0+.
-# Description: "Extract Features to Sites" extracts data from rasters to points representing plot locations and collapses multi-point plots into single points with plot-level means.
+# Description: "Extract mapped environmental covariates to AKVEG sites" extracts data from rasters to points representing plot locations and collapses multi-point plots into single points with plot-level means.
 # ---------------------------------------------------------------------------
 
 # Set root directory
@@ -20,10 +20,10 @@ data_folder = paste(drive,
 # Define input folders
 site_folder = paste(drive,
                     root_folder,
-                    'Projects/VegetationEcology/AKVEG_QuantitativeMap/Data/Data_Input/sites',
+                    'Projects/VegetationEcology/FIA_Community_Analysis/Data/Data_Input/sites',
                     sep = '/')
 parsed_folder = paste(site_folder,
-                      'parsed',
+                      'parsed_akveg',
                       sep = '/')
 topography_folder = paste(data_folder,
                           'topography/Composite_10m_Beringia/integer/gridded_select',
@@ -49,18 +49,26 @@ fire_folder = paste(data_folder,
 
 # Define input site metadata
 site_file = paste(site_folder,
-                  'sites_merged.csv',
+                  'sites_nab.xlsx',
                   sep = '/')
+
+# Define output file
+output_folder = paste(drive,
+                      root_folder,
+                      'Projects/VegetationEcology/FIA_Community_Analysis/Data/Data_Input/environment',
+                      sep = '/')
+output_file = paste(output_folder, 'environment_mapped_akveg.csv', sep = '/')
 
 # Import required libraries for geospatial processing: dplyr, raster, rgdal, sp, and stringr.
 library(dplyr)
 library(raster)
+library(readxl)
 library(rgdal)
 library(sp)
 library(stringr)
 
 # Read site metadata into dataframe
-site_metadata = read.csv(site_file, fileEncoding = 'UTF-8')
+site_metadata = read_xlsx(site_file, sheet = 'sites_nab')
 
 # Generate a list of parsed site points
 grid_list = list.files(parsed_folder, pattern='shp$', full.names=FALSE)
@@ -270,6 +278,5 @@ sites_joined = site_metadata %>%
   drop_na()
 
 # Export data as a csv
-output_csv = paste(site_folder, 'sites_extracted.csv', sep = '/')
-write.csv(sites_joined, file = output_csv, fileEncoding = 'UTF-8')
+write.csv(sites_joined, file = output_file, fileEncoding = 'UTF-8')
 print('Finished extracting data to sites.')

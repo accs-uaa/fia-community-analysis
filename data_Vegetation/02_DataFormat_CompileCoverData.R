@@ -26,7 +26,7 @@ FIA_database = paste(data_folder,
 # Define input site table
 sites_file = paste(data_folder,
                   'sites',
-                  'sites_all.csv',
+                  'sites_nab.xlsx',
                   sep = '/')
 
 # Define input USDA Plants Database codes table
@@ -50,7 +50,7 @@ codes_file = paste(data_folder,
 # Define output file
 output_cover = paste(data_folder,
                      'vegetation',
-                     'cover_all.csv',
+                     'cover_nab.csv',
                      sep = '/')
 
 # Set repository directory
@@ -68,10 +68,10 @@ library(tibble)
 library(tidyr)
 
 # Read reference tables into data frame
-plants_codes = read_excel(plants_file, sheet = 'speciesPlants')
+plants_codes = read_xlsx(plants_file, sheet = 'speciesPlants')
 functional_groups = read.csv(groups_file, encoding = 'UTF-8')
-sites_all = read.csv(sites_file, encoding = 'UTF-8')
-codes_analysis = read_excel(codes_file, sheet = 'codes')
+sites_nab = read_xlsx(sites_file, sheet = 'sites_nab')
+codes_analysis = read_xlsx(codes_file, sheet = 'codes')
 
 # Import database connection function
 connection_script = paste(repository,
@@ -126,12 +126,8 @@ FROM GRND_LYR_FNCTL_GRP
     LEFT JOIN PLOT ON GRND_LYR_FNCTL_GRP.PLOT = PLOT.PLOT
 ORDER BY plot;'
 
-# Read FIA cover data into tibbles
-vascular_fia = as_tibble(dbGetQuery(fia_connection, query_vascular))
-nonvascular_fia = as_tibble(dbGetQuery(fia_connection, query_nonvascular))
-
 # Summarize FIA vascular cover by subplot
-vascular_subplot_fia = vascular_fia %>%
+vascular_subplot_fia = as_tibble(dbGetQuery(fia_connection, query_vascular)) %>%
   mutate(veg_observe_date = if_else(day < 10,
                                     paste(year, '-0', month, '-0', day, sep =''),
                                     paste(year, '-0', month, '-', day, sep = ''))) %>%
@@ -169,7 +165,7 @@ vascular_plot_fia = vascular_plot_fia %>%
   select(project, site_code, veg_observe_date, cover_type, name_accepted, cover)
 
 # Identify FIA functional groups
-nonvascular_subplot_fia = nonvascular_fia %>%
+nonvascular_subplot_fia = as_tibble(dbGetQuery(fia_connection, query_nonvascular)) %>%
   filter(name_original_code != 'N' |
            name_original_code != 'Y') %>%
   mutate(cover = if_else(cover == 'T', '0', cover)) %>%
@@ -213,7 +209,7 @@ nonvascular_plot_fia = nonvascular_subplot_fia %>%
 cover_fia = rbind(vascular_plot_fia, nonvascular_plot_fia)
 
 # Select single condition forested plots from FIA
-sites_fia = sites_all %>%
+sites_fia = sites_nab %>%
   filter(project == 'FIA Interior') %>%
   select(site_code)
 
@@ -246,7 +242,7 @@ WHERE cover.cover_type_id = 2
 ORDER BY cover_id;'
 
 # Select forested plots from AKVEG
-sites_akveg = sites_all %>%
+sites_akveg = sites_nab %>%
   filter(project != 'FIA Interior') %>%
   select(site_code)
 
