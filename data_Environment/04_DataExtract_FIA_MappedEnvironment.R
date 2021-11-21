@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # Extract mapped environmental covariates to FIA sites
 # Author: Timm Nawrocki
-# Last Updated: 2021-10-12
+# Last Updated: 2021-10-31
 # Usage: Must be executed in R 4.0.0+.
 # Description: "Extract mapped environmental covariates to FIA sites" extracts data from rasters to points representing plot locations and collapses multi-point plots into single points with plot-level means.
 # ---------------------------------------------------------------------------
@@ -66,6 +66,7 @@ library(readxl)
 library(rgdal)
 library(sp)
 library(stringr)
+library(tidyr)
 
 # Read site metadata into dataframe
 site_metadata = read_xlsx(site_file, sheet = 'sites_nab')
@@ -118,11 +119,11 @@ for (grid in grid_list) {
   print(length(predictors_all))
   
   # Generate a stack of all predictor rasters
-  predictor_stack = stack(predictors_all)
+  predictor_stack = raster::stack(predictors_all)
   
   # Read site data and extract features
   site_data = readOGR(dsn = grid_sites)
-  sites_extracted = data.frame(site_data@data, extract(predictor_stack, site_data))
+  sites_extracted = data.frame(site_data@data, raster::extract(predictor_stack, site_data))
   
   # Convert field names to standard
   sites_extracted = sites_extracted %>%
@@ -194,6 +195,7 @@ for (grid in grid_list) {
 
   # Summarize data by site
   sites_mean = sites_extracted %>%
+    drop_na() %>%
     group_by(site_code) %>%
     summarize(aspect = round(mean(aspect), digits = 0),
               wetness = round(mean(wetness), digits = 0),
@@ -266,17 +268,83 @@ for (grid in grid_list) {
   data_list = c(data_list, list(sites_mean))
 }
 
-# Import required library for data manipulation: tidyr. NOTE: Tidyr conflicts with raster and therefore must be loaded after all raster extractions are complete.
-library(tidyr)
-
 # Merge data list into single data frame
 sites_combined = bind_rows(data_list)
 
+# Summarize data by site
+sites_output = sites_combined %>%
+  group_by(site_code) %>%
+  summarize(aspect = round(mean(aspect), digits = 0),
+            wetness = round(mean(wetness), digits = 0),
+            elevation = round(mean(elevation), digits = 0),
+            slope = round(mean(slope), digits = 0),
+            roughness = round(mean(roughness), digits = 0),
+            exposure = round(mean(exposure), digits = 0),
+            area = round(mean(area), digits = 0),
+            relief = round(mean(relief), digits = 0),
+            position = round(mean(position), digits = 0),
+            radiation = round(mean(radiation), digits = 0),
+            vh = round(mean(vh), digits = 0),
+            vv = round(mean(vv), digits = 0),
+            shortIR1_06 = round(mean(shortIR1_06), digits = 0),
+            shortIR2_06 = round(mean(shortIR2_06), digits = 0),
+            blue_06 = round(mean(blue_06), digits = 0),
+            green_06 = round(mean(green_06), digits = 0),
+            red_06 = round(mean(red_06), digits = 0),
+            redge1_06 = round(mean(redge1_06), digits = 0),
+            redge2_06 = round(mean(redge2_06), digits = 0),
+            redge3_06 = round(mean(redge3_06), digits = 0),
+            nearIR_06 = round(mean(nearIR_06), digits = 0),
+            redge4_06 = round(mean(redge4_06), digits = 0),
+            evi2_06 = round(mean(evi2_06), digits = 0),
+            nbr_06 = round(mean(nbr_06), digits = 0),
+            ndmi_06 = round(mean(ndmi_06), digits = 0),
+            ndsi_06 = round(mean(ndsi_06), digits = 0),
+            ndvi_06 = round(mean(ndvi_06), digits = 0),
+            ndwi_06 = round(mean(ndwi_06), digits = 0),
+            shortIR1_07 = round(mean(shortIR1_07), digits = 0),
+            shortIR2_07 = round(mean(shortIR2_07), digits = 0),
+            blue_07 = round(mean(blue_07), digits = 0),
+            green_07 = round(mean(green_07), digits = 0),
+            red_07 = round(mean(red_07), digits = 0),
+            redge1_07 = round(mean(redge1_07), digits = 0),
+            redge2_07 = round(mean(redge2_07), digits = 0),
+            redge3_07 = round(mean(redge3_07), digits = 0),
+            nearIR_07 = round(mean(nearIR_07), digits = 0),
+            redge4_07 = round(mean(redge4_07), digits = 0),
+            evi2_07 = round(mean(evi2_07), digits = 0),
+            nbr_07 = round(mean(nbr_07), digits = 0),
+            ndmi_07 = round(mean(ndmi_07), digits = 0),
+            ndsi_07 = round(mean(ndsi_07), digits = 0),
+            ndvi_07 = round(mean(ndvi_07), digits = 0),
+            ndwi_07 = round(mean(ndwi_07), digits = 0),
+            shortIR1_08 = round(mean(shortIR1_08), digits = 0),
+            shortIR2_08 = round(mean(shortIR2_08), digits = 0),
+            blue_08 = round(mean(blue_08), digits = 0),
+            green_08 = round(mean(green_08), digits = 0),
+            red_08 = round(mean(red_08), digits = 0),
+            redge1_08 = round(mean(redge1_08), digits = 0),
+            redge2_08 = round(mean(redge2_08), digits = 0),
+            redge3_08 = round(mean(redge3_08), digits = 0),
+            nearIR_08 = round(mean(nearIR_08), digits = 0),
+            redge4_08 = round(mean(redge4_08), digits = 0),
+            evi2_08 = round(mean(evi2_08), digits = 0),
+            nbr_08 = round(mean(nbr_08), digits = 0),
+            ndmi_08 = round(mean(ndmi_08), digits = 0),
+            ndsi_08 = round(mean(ndsi_08), digits = 0),
+            ndvi_08 = round(mean(ndvi_08), digits = 0),
+            ndwi_08 = round(mean(ndwi_08), digits = 0),
+            lstWarmth = round(mean(lstWarmth), digits = 0),
+            precip = round(mean(precip), digits = 0),
+            summerWarmth = round(mean(summerWarmth), digits = 0),
+            januaryMin = round(mean(januaryMin), digits = 0),
+            fireYear = round(max(fireYear), digits = 0),
+            num_points = sum(num_points))
+
 # Join site metadata to extracted data and remove na values
-sites_joined = site_metadata %>%
-  inner_join(sites_combined, by = 'site_code') %>%
-  drop_na()
+sites_output = site_metadata %>%
+  inner_join(sites_output, by = 'site_code')
 
 # Export data as a csv
-write.csv(sites_joined, file = output_file, fileEncoding = 'UTF-8')
+write.csv(sites_output, file = output_file, fileEncoding = 'UTF-8')
 print('Finished extracting data to sites.')
